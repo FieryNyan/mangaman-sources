@@ -16,11 +16,11 @@
     {
       "id": "en.weebcentral",
       "name": "Weeb Central",
-      "version": 1,
+      "version": 2,
       "language": "en",
       "nsfw": false,
       "file": "weebcentral.js",
-      "sha256": "f109c14f6053431e81cd3170063c197e65243e802d57cf58c997106f140ec066",
+      "sha256": "dd0828dcddd43d04472f8fcbdc4a6c6bee6f2cc0e850ff25cdeb2a67100abf3d",
       "domains": [
         "weebcentral.com",
         "compsci88.com",
@@ -30,11 +30,11 @@
     {
       "id": "en.mangahub",
       "name": "MangaHub",
-      "version": 1,
+      "version": 2,
       "language": "en",
       "nsfw": false,
       "file": "mangahub.js",
-      "sha256": "3dbb472a6a8aed50e857502598606f32d9e7d230e525ea7f42609f4b4fe3424f",
+      "sha256": "ac4beaecfd23716c18e423be268f196701dc682dba34d5ac6626e92e236c7606",
       "domains": [
         "mangahub.io",
         "mghcdn.com"
@@ -43,11 +43,11 @@
     {
       "id": "en.toonily",
       "name": "Toonily",
-      "version": 1,
+      "version": 2,
       "language": "en",
       "nsfw": true,
       "file": "toonily.js",
-      "sha256": "a4cd149ed4a3e8dc1ffc73f2c242ac075bb61fc95487cc7aebcfeb284bb3b60a",
+      "sha256": "3d7c0c8f8de1f23c2a6b69612cba8b7f0a8083a6955df5d06a905c82efa245ec",
       "domains": [
         "toonily.com"
       ]
@@ -55,11 +55,11 @@
     {
       "id": "en.comix",
       "name": "Comix",
-      "version": 1,
+      "version": 2,
       "language": "en",
       "nsfw": true,
       "file": "comix.js",
-      "sha256": "c44416c8b46815d0c08bf6df430f3f06faab1d42e4f694bb50f4affcd34c2a0c",
+      "sha256": "59afae9b4d7e9833c1b7bd3796dddab25530fd38e8b8aef7a57345510e068b28",
       "domains": [
         "comix.to",
         "comix.ws",

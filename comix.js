@@ -122,7 +122,7 @@ globalThis.source = {
   manifest: {
     id: "en.comix",
     name: "Comix",
-    version: 1,
+    version: 2,
     language: "en",
     nsfw: true,
     baseURL: BASE,
@@ -132,7 +132,7 @@ globalThis.source = {
       "kkplayer.wtf",
       "cloudflare.com",
     ],
-    rateLimitPerSecond: 1,
+    rateLimitPerSecond: 2,
     imageHeaders: {},
     listings: [
       { id: "popular", name: "Popular" },

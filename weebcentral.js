@@ -79,16 +79,69 @@ function searchURL(query, page, filters) {
   return BASE + "/search/data?" + params.join("&");
 }
 
+function parseChapters(html) {
+  const chapters = [];
+  const seen = {};
+  // Keep the window tight so this stays fast on large chapter lists.
+  const re =
+    /href="\/chapters\/([^"]+)"[\s\S]{0,1500}?span class="">([^<]*)<\/span>[\s\S]{0,800}?datetime="([^"]+)"/g;
+  let match;
+  while ((match = re.exec(html))) {
+    const id = match[1];
+    if (seen[id]) continue;
+    seen[id] = true;
+    const title = match[2].trim();
+    const num = chapterNumber(title);
+    const item = {
+      id: id,
+      title: title,
+      date: match[3],
+      language: "en",
+    };
+    if (num != null && isFinite(num)) item.chapter = num;
+    const around = html.slice(Math.max(0, match.index - 80), match.index + 200);
+    if (/official/i.test(around)) item.scanlator = "Official";
+    chapters.push(item);
+  }
+  if (!chapters.length) {
+    // Fallback: ids only, still avoids HTMLQuery on multi-MB pages.
+    const loose = /href="\/chapters\/([^"]+)"/g;
+    while ((match = loose.exec(html))) {
+      const id = match[1];
+      if (seen[id]) continue;
+      seen[id] = true;
+      chapters.push({ id: id, title: id, language: "en" });
+    }
+  }
+  return chapters;
+}
+
+function parsePages(html) {
+  const pages = [];
+  const re = /<img\b[^>]*\bsrc="([^"]+)"/gi;
+  let match;
+  while ((match = re.exec(html))) {
+    const src = match[1];
+    if (!src || src.indexOf("/static/") !== -1) continue;
+    if (!/\.(png|jpe?g|webp|gif|avif)(\?|$)/i.test(src) && src.indexOf("manga/") === -1) continue;
+    pages.push({
+      url: abs(src),
+      headers: { Referer: BASE + "/", Accept: "image/avif,image/webp,*/*" },
+    });
+  }
+  return pages;
+}
+
 globalThis.source = {
   manifest: {
     id: "en.weebcentral",
     name: "Weeb Central",
-    version: 1,
+    version: 2,
     language: "en",
     nsfw: false,
     baseURL: BASE,
     domains: ["weebcentral.com", "compsci88.com", "planeptune.us"],
-    rateLimitPerSecond: 0.5,
+    rateLimitPerSecond: 2,
     imageHeaders: {
       Referer: BASE + "/",
       Accept: "image/avif,image/webp,*/*",
@@ -165,30 +218,13 @@ globalThis.source = {
   },
 
   getManga(id) {
-    const res = get(BASE + "/series/" + encodeURIComponent(id) + "/");
+    const res = get(BASE + "/series/" + encodeURIComponent(id));
     const html = res.body;
-    const titleNode = mm.html.select(html, "h1");
-    const title = (titleNode[0] && titleNode[0].text.trim()) || id;
-    const coverNode = mm.html.select(html, "source");
-    let cover = "";
-    for (let i = 0; i < coverNode.length; i++) {
-      const srcset = coverNode[i].attrs.srcset || "";
-      if (srcset.indexOf("/cover/normal/") !== -1) {
-        cover = srcset.split(/\s+/)[0];
-        break;
-      }
-      if (!cover && srcset) cover = srcset.split(/\s+/)[0];
-    }
-    if (!cover) {
-      const img = mm.html.select(html, "img");
-      for (let i = 0; i < img.length; i++) {
-        const src = img[i].attrs.src || "";
-        if (src.indexOf("/cover/") !== -1) {
-          cover = src;
-          break;
-        }
-      }
-    }
+    const titleMatch = html.match(/<h1[^>]*>([^<]+)<\/h1>/i);
+    const title = titleMatch ? titleMatch[1].trim() : id;
+    const coverMatch =
+      html.match(/srcset="(https:\/\/[^"]+\/cover\/normal\/[^"\s]+)/) ||
+      html.match(/src="(https:\/\/[^"]+\/cover\/[^"]+)"/);
     const authorMatch = html.match(/Author\(s\):\s*<\/strong>[\s\S]*?<a[^>]*>([^<]+)<\/a>/i);
     const statusMatch = html.match(/Status:\s*<\/strong>\s*<a[^>]*>([^<]+)<\/a>/i);
     const descMatch = html.match(/<strong>\s*Description\s*<\/strong>\s*<p[^>]*>([\s\S]*?)<\/p>/i);
@@ -206,7 +242,7 @@ globalThis.source = {
       title: title,
       author: authorMatch ? authorMatch[1].trim() : undefined,
       description: descMatch ? descMatch[1].replace(/<[^>]+>/g, "").trim() : undefined,
-      cover: cover,
+      cover: coverMatch ? coverMatch[1] : undefined,
       status: statusOf(statusMatch && statusMatch[1]),
       tags: tags,
     };
@@ -214,29 +250,7 @@ globalThis.source = {
 
   getChapters(mangaId) {
     const res = get(BASE + "/series/" + encodeURIComponent(mangaId) + "/full-chapter-list");
-    const links = mm.html.select(res.body, "a");
-    const chapters = [];
-    for (let i = 0; i < links.length; i++) {
-      const href = links[i].attrs.href || "";
-      const idMatch = href.match(/\/chapters\/([^/?#]+)/);
-      if (!idMatch) continue;
-      const titleMatch = links[i].html.match(/<span class="">([^<]+)<\/span>/);
-      const title = (titleMatch && titleMatch[1].trim()) || links[i].text.replace(/\s+/g, " ").trim();
-      if (!title || title.indexOf("Chapter") === -1 && !/\d/.test(title)) {
-        if (!/chapter/i.test(title) && !/^\d/.test(title)) continue;
-      }
-      const timeMatch = links[i].html.match(/datetime="([^"]+)"/);
-      const official = /official/i.test(links[i].html);
-      const num = chapterNumber(title);
-      chapters.push({
-        id: idMatch[1],
-        title: title,
-        chapter: num,
-        date: timeMatch ? timeMatch[1] : undefined,
-        scanlator: official ? "Official" : undefined,
-        language: "en",
-      });
-    }
+    const chapters = parseChapters(res.body);
     if (!chapters.length) mm.errors.fail("No chapters found.");
     return chapters;
   },
@@ -247,18 +261,7 @@ globalThis.source = {
       "/chapters/" +
       encodeURIComponent(chapterId) +
       "/images?is_prev=False&reading_style=long_strip";
-    const res = get(url);
-    const imgs = mm.html.select(res.body, "img");
-    const pages = [];
-    for (let i = 0; i < imgs.length; i++) {
-      const src = imgs[i].attrs.src || imgs[i].attrs["data-src"] || "";
-      if (!src || src.indexOf("/static/") !== -1) continue;
-      if (!/\.(png|jpe?g|webp|gif|avif)(\?|$)/i.test(src) && src.indexOf("manga/") === -1) continue;
-      pages.push({
-        url: abs(src),
-        headers: { Referer: BASE + "/", Accept: "image/avif,image/webp,*/*" },
-      });
-    }
+    const pages = parsePages(get(url).body);
     if (!pages.length) mm.errors.fail("No pages found.");
     return pages;
   },
