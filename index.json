@@ -16,16 +16,19 @@
     {
       "id": "en.weebcentral",
       "name": "Weeb Central",
-      "version": 3,
+      "version": 4,
       "language": "en",
       "nsfw": false,
       "file": "weebcentral.js",
-      "sha256": "cb6d9a3c98acaa567d6dee52c4d3f4f1eca7f742e29984e39419c439891c6800",
+      "sha256": "46854a00d7aae663d812d60930ec1f67ea869fdf48500dc2662a8dc67cb796dc",
       "domains": [
         "weebcentral.com",
         "compsci88.com",
         "planeptune.us",
-        "lastation.us"
+        "lastation.us",
+        "lowee.us",
+        "manga123.net",
+        "akamaized.net"
       ]
     },
     {

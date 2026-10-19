@@ -126,7 +126,10 @@ function parsePages(html) {
     if (!/\.(png|jpe?g|webp|gif|avif)(\?|$)/i.test(src) && src.indexOf("manga/") === -1) continue;
     pages.push({
       url: abs(src),
-      headers: { Accept: "image/jpeg,image/png,image/webp,image/*,*/*" },
+      headers: {
+        Accept: "image/jpeg,image/png,image/webp,image/*,*/*",
+        Referer: BASE + "/",
+      },
     });
   }
   return pages;
@@ -136,14 +139,23 @@ globalThis.source = {
   manifest: {
     id: "en.weebcentral",
     name: "Weeb Central",
-    version: 3,
+    version: 4,
     language: "en",
     nsfw: false,
     baseURL: BASE,
-    domains: ["weebcentral.com", "compsci88.com", "planeptune.us", "lastation.us"],
+    domains: [
+      "weebcentral.com",
+      "compsci88.com",
+      "planeptune.us",
+      "lastation.us",
+      "lowee.us",
+      "manga123.net",
+      "akamaized.net",
+    ],
     rateLimitPerSecond: 2,
     imageHeaders: {
       Accept: "image/jpeg,image/png,image/webp,image/*,*/*",
+      Referer: BASE + "/",
     },
     listings: [
       { id: "popular", name: "Popular" },
