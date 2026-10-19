@@ -47,11 +47,11 @@
     {
       "id": "en.toonily",
       "name": "Toonily",
-      "version": 2,
+      "version": 3,
       "language": "en",
       "nsfw": true,
       "file": "toonily.js",
-      "sha256": "3d7c0c8f8de1f23c2a6b69612cba8b7f0a8083a6955df5d06a905c82efa245ec",
+      "sha256": "9f750055965995c3849dde48296a8bfd8292d4db06d4b4fe5fc477c2a597084b",
       "domains": [
         "toonily.com"
       ]
@@ -59,16 +59,25 @@
     {
       "id": "en.comix",
       "name": "Comix",
-      "version": 2,
+      "version": 3,
       "language": "en",
       "nsfw": true,
       "file": "comix.js",
-      "sha256": "59afae9b4d7e9833c1b7bd3796dddab25530fd38e8b8aef7a57345510e068b28",
+      "sha256": "c23dd0861c2f8a642b9163b4ad6b3b0b157d2a68189f156dd3077a485732ad98",
       "domains": [
         "comix.to",
         "comix.ws",
         "kkplayer.wtf",
-        "cloudflare.com"
+        "cloudflare.com",
+        "wowpic1.store",
+        "wowpic2.store",
+        "wowpic3.store",
+        "wowpic4.store",
+        "wowpic5.store",
+        "wowpic6.store",
+        "wowpic7.store",
+        "wowpic8.store",
+        "wowpic9.store"
       ]
     }
   ]

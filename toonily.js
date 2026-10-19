@@ -188,11 +188,11 @@ globalThis.source = {
   manifest: {
     id: "en.toonily",
     name: "Toonily",
-    version: 2,
+    version: 3,
     language: "en",
     nsfw: true,
     baseURL: BASE,
-    domains: ["toonily.com"],
+    domains: ["toonily.com", "wp.com", "googleusercontent.com"],
     rateLimitPerSecond: 2,
     imageHeaders: {
       Referer: BASE + "/",
