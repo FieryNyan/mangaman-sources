@@ -61,15 +61,14 @@
     {
       "id": "en.comix",
       "name": "Comix",
-      "version": 3,
+      "version": 4,
       "language": "en",
       "nsfw": true,
       "file": "comix.js",
-      "sha256": "c23dd0861c2f8a642b9163b4ad6b3b0b157d2a68189f156dd3077a485732ad98",
+      "sha256": "7cef379974fad1c6cbdfafa5064e34cec2e4cde246669cb351f6e23d9356381e",
       "domains": [
         "comix.to",
         "comix.ws",
-        "kkplayer.wtf",
         "cloudflare.com",
         "wowpic1.store",
         "wowpic2.store",
