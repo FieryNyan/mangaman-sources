@@ -1,0 +1,71 @@
+{
+  "name": "MangaMan Test",
+  "sources": [
+    {
+      "id": "app.mangaman.fixture",
+      "name": "Fixture",
+      "version": 1,
+      "language": "en",
+      "nsfw": false,
+      "file": "fixture.js",
+      "sha256": "61ef47b7c8003dc134974e27c383c20a9ba4931e53cbf380d6cf4b9a9b2bef48",
+      "domains": [
+        "fixture.mangaman.local"
+      ]
+    },
+    {
+      "id": "en.weebcentral",
+      "name": "Weeb Central",
+      "version": 1,
+      "language": "en",
+      "nsfw": false,
+      "file": "weebcentral.js",
+      "sha256": "f109c14f6053431e81cd3170063c197e65243e802d57cf58c997106f140ec066",
+      "domains": [
+        "weebcentral.com",
+        "compsci88.com",
+        "planeptune.us"
+      ]
+    },
+    {
+      "id": "en.mangahub",
+      "name": "MangaHub",
+      "version": 1,
+      "language": "en",
+      "nsfw": false,
+      "file": "mangahub.js",
+      "sha256": "3dbb472a6a8aed50e857502598606f32d9e7d230e525ea7f42609f4b4fe3424f",
+      "domains": [
+        "mangahub.io",
+        "mghcdn.com"
+      ]
+    },
+    {
+      "id": "en.toonily",
+      "name": "Toonily",
+      "version": 1,
+      "language": "en",
+      "nsfw": true,
+      "file": "toonily.js",
+      "sha256": "a4cd149ed4a3e8dc1ffc73f2c242ac075bb61fc95487cc7aebcfeb284bb3b60a",
+      "domains": [
+        "toonily.com"
+      ]
+    },
+    {
+      "id": "en.comix",
+      "name": "Comix",
+      "version": 1,
+      "language": "en",
+      "nsfw": true,
+      "file": "comix.js",
+      "sha256": "c44416c8b46815d0c08bf6df430f3f06faab1d42e4f694bb50f4affcd34c2a0c",
+      "domains": [
+        "comix.to",
+        "comix.ws",
+        "kkplayer.wtf",
+        "cloudflare.com"
+      ]
+    }
+  ]
+}
