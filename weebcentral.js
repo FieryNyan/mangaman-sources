@@ -139,7 +139,7 @@ globalThis.source = {
   manifest: {
     id: "en.weebcentral",
     name: "Weeb Central",
-    version: 4,
+    version: 5,
     language: "en",
     nsfw: false,
     baseURL: BASE,
@@ -152,7 +152,7 @@ globalThis.source = {
       "manga123.net",
       "akamaized.net",
     ],
-    rateLimitPerSecond: 2,
+    rateLimitPerSecond: 4,
     imageHeaders: {
       Accept: "image/jpeg,image/png,image/webp,image/*,*/*",
       Referer: BASE + "/",

@@ -190,12 +190,12 @@ globalThis.source = {
   manifest: {
     id: "en.mangahub",
     name: "MangaHub",
-    version: 3,
+    version: 4,
     language: "en",
     nsfw: false,
     baseURL: BASE,
     domains: ["mangahub.io", "mghcdn.com"],
-    rateLimitPerSecond: 2,
+    rateLimitPerSecond: 4,
     imageHeaders: {
       Referer: BASE + "/",
     },

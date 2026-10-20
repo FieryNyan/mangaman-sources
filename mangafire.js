@@ -305,7 +305,7 @@ globalThis.source = {
   manifest: {
     id: "en.mangafire",
     name: "MangaFire",
-    version: 1,
+    version: 2,
     language: "en",
     nsfw: false,
     baseURL: BASE,
@@ -317,7 +317,7 @@ globalThis.source = {
       "mfcdn3.xyz",
       "mfcdn4.xyz",
     ],
-    rateLimitPerSecond: 2,
+    rateLimitPerSecond: 4,
     imageHeaders: {
       Referer: BASE + "/",
     },

@@ -175,7 +175,7 @@ function browseCapture(url, inject, poll, timeoutMs) {
     inject: clear + inject,
     script: poll,
     pollMs: 450,
-    timeoutMs: timeoutMs || 22000,
+    timeoutMs: timeoutMs || 16000,
   });
 }
 
@@ -279,7 +279,7 @@ function browseURL(orderKey, page, query, filters) {
 
 function browseList(orderKey, page, query, filters) {
   const url = browseURL(orderKey, page, query, filters);
-  const res = browseCapture(url, BROWSE_INJECT, BROWSE_POLL, 25000);
+  const res = browseCapture(url, BROWSE_INJECT, BROWSE_POLL, 16000);
   return listResult(parseJSONBody(res));
 }
 
@@ -297,7 +297,7 @@ globalThis.source = {
   manifest: {
     id: "en.comix",
     name: "Comix",
-    version: 6,
+    version: 7,
     language: "en",
     nsfw: true,
     baseURL: BASE,
@@ -315,7 +315,7 @@ globalThis.source = {
       "wowpic8.store",
       "wowpic9.store",
     ],
-    rateLimitPerSecond: 1,
+    rateLimitPerSecond: 2,
     imageHeaders: {},
     listings: [
       { id: "popular", name: "Popular" },
@@ -384,7 +384,7 @@ globalThis.source = {
       waitMs: 400,
       script: DETAIL_POLL,
       pollMs: 450,
-      timeoutMs: 20000,
+      timeoutMs: 14000,
     });
     let detail;
     try {
@@ -406,7 +406,7 @@ globalThis.source = {
   },
 
   getChapters(mangaId) {
-    const res = browseCapture(BASE + "/title/" + mangaId, CHAPTERS_INJECT, CHAPTERS_POLL, 30000);
+    const res = browseCapture(BASE + "/title/" + mangaId, CHAPTERS_INJECT, CHAPTERS_POLL, 20000);
     const data = parseJSONBody(res);
     const items = data.items || data.chapters || [];
     if (!items.length) mm.errors.fail("No chapters found. Wait for the title page to finish loading, then retry.");
@@ -441,7 +441,7 @@ globalThis.source = {
       String(chapterId).indexOf("-chapter-") !== -1
         ? "/title/" + mangaId + "/" + chapterId
         : "/title/" + mangaId + "/" + chapterId;
-    let res = browseCapture(BASE + path, PAGES_INJECT, PAGES_POLL, 30000);
+    let res = browseCapture(BASE + path, PAGES_INJECT, PAGES_POLL, 20000);
     let payload;
     try {
       payload = JSON.parse(res.body);

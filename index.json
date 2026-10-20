@@ -16,11 +16,11 @@
     {
       "id": "en.weebcentral",
       "name": "Weeb Central",
-      "version": 4,
+      "version": 5,
       "language": "en",
       "nsfw": false,
       "file": "weebcentral.js",
-      "sha256": "46854a00d7aae663d812d60930ec1f67ea869fdf48500dc2662a8dc67cb796dc",
+      "sha256": "fd251e41458fc24c47d50fea990167a7d99595215b5a62f6dbfcaf824e57fc53",
       "domains": [
         "weebcentral.com",
         "compsci88.com",
@@ -34,11 +34,11 @@
     {
       "id": "en.mangafire",
       "name": "MangaFire",
-      "version": 1,
+      "version": 2,
       "language": "en",
       "nsfw": false,
       "file": "mangafire.js",
-      "sha256": "8b219cd919fbf89f874aeb76ccce8593ded3dde6b5f8ba26049114001a9ca6b9",
+      "sha256": "1b465c88761bdb740e6003595e1ed82db77aeac89c9ed8ab864a1423a56a7976",
       "domains": [
         "mangafire.to",
         "mfcdn.nl",
@@ -51,11 +51,11 @@
     {
       "id": "en.mangahub",
       "name": "MangaHub",
-      "version": 3,
+      "version": 4,
       "language": "en",
       "nsfw": false,
       "file": "mangahub.js",
-      "sha256": "78aa608c4df50321c1e534f2c1f57adfaccc8ed9a246cd958c1400e56e314980",
+      "sha256": "ac67fe6bf0a9e0fa74543d0401f70c8b1614b9bb65868264eb3ddac402b0d203",
       "domains": [
         "mangahub.io",
         "mghcdn.com"
@@ -64,11 +64,11 @@
     {
       "id": "en.toonily",
       "name": "Toonily",
-      "version": 5,
+      "version": 6,
       "language": "en",
       "nsfw": true,
       "file": "toonily.js",
-      "sha256": "291fb1fd3dae4f67d925c03330302c45d821d19e6d71c4d8bd0102fd93bb7bec",
+      "sha256": "50d07da5393f465397006c6abf4684a464fc0a587689b20944166c9f2d055fa0",
       "domains": [
         "toonily.com",
         "tnlycdn.com",
@@ -79,11 +79,11 @@
     {
       "id": "en.comix",
       "name": "Comix",
-      "version": 6,
+      "version": 7,
       "language": "en",
       "nsfw": true,
       "file": "comix.js",
-      "sha256": "237d505b021fa71ed8cccbb69d67ec860f375e7bf2765ae2f2cba4143cf963ea",
+      "sha256": "8228ec3e34da729b1a038947c93f31be4d385cd975e1107c7444d4ddfad39e0f",
       "domains": [
         "comix.to",
         "comix.ws",
