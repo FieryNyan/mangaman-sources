@@ -32,6 +32,23 @@
       ]
     },
     {
+      "id": "en.mangafire",
+      "name": "MangaFire",
+      "version": 1,
+      "language": "en",
+      "nsfw": false,
+      "file": "mangafire.js",
+      "sha256": "8b219cd919fbf89f874aeb76ccce8593ded3dde6b5f8ba26049114001a9ca6b9",
+      "domains": [
+        "mangafire.to",
+        "mfcdn.nl",
+        "mfcdn1.xyz",
+        "mfcdn2.xyz",
+        "mfcdn3.xyz",
+        "mfcdn4.xyz"
+      ]
+    },
+    {
       "id": "en.mangahub",
       "name": "MangaHub",
       "version": 2,
