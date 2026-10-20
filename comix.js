@@ -1,62 +1,215 @@
 // Comix — https://comix.to
-// Catalogue, details, and chapter lists are loaded through mm.http.browser so
-// Cloudflare clearance stays in the same WKWebView cookie store as the
-// challenge sheet. Signed /api/v1 calls cannot be forged after Comix moved the
-// signer into a rotating VM.
+// Cloudflare + a rotating in-page API signer mean catalogue data must be read
+// from the site's own WebView fetch (same approach as Keiyoushi Comix).
 const BASE = "https://comix.to";
 
-function browse(url, waitMs) {
-  return mm.http.browser(url, { waitMs: waitMs || 0 });
+// Installed at document-start so we see /api/v1/manga before the SPA finishes.
+const BROWSE_INJECT =
+  "(function(){" +
+  "if(window.__mmComixBrowseHook)return;" +
+  "window.__mmComixBrowseHook=1;" +
+  "window.__mmComixBrowse='';" +
+  "function capture(parsed){" +
+  "  try{" +
+  "    if(parsed&&Array.isArray(parsed.items))parsed={result:parsed};" +
+  "    if(parsed&&parsed.result&&Array.isArray(parsed.result.items)&&parsed.result.items.length){" +
+  "      window.__mmComixBrowse=JSON.stringify(parsed);" +
+  "      return true;" +
+  "    }" +
+  "  }catch(e){}" +
+  "  return false;" +
+  "}" +
+  "function fromInitial(){" +
+  "  try{" +
+  "    var el=document.querySelector('script#initial-data');" +
+  "    if(!el)return;" +
+  "    var queries=JSON.parse(el.textContent).queries;" +
+  "    if(!queries)return;" +
+  "    var vals=Object.keys(queries).map(function(k){return queries[k];});" +
+  "    for(var i=0;i<vals.length;i++) if(capture(vals[i])) return;" +
+  "  }catch(e){}" +
+  "}" +
+  "function should(url){" +
+  "  try{" +
+  "    var u=new URL(url,location.origin);" +
+  "    if(u.pathname.indexOf('/api/v1/manga')===-1)return false;" +
+  "    if(/\\/chapters\\/?$/.test(u.pathname))return false;" +
+  "    return true;" +
+  "  }catch(e){return false;}" +
+  "}" +
+  "var ofetch=window.fetch;" +
+  "if(typeof ofetch==='function'){" +
+  "  window.fetch=function(){" +
+  "    return ofetch.apply(this,arguments).then(function(r){" +
+  "      try{" +
+  "        if(should(r.url||'')) r.clone().text().then(function(t){try{capture(JSON.parse(t));}catch(e){}});" +
+  "      }catch(e){}" +
+  "      return r;" +
+  "    });" +
+  "  };" +
+  "}" +
+  "var oOpen=XMLHttpRequest.prototype.open,oSend=XMLHttpRequest.prototype.send;" +
+  "XMLHttpRequest.prototype.open=function(m,u){this.__mmU=String(u||'');return oOpen.apply(this,arguments);};" +
+  "XMLHttpRequest.prototype.send=function(){" +
+  "  this.addEventListener('load',function(){try{if(should(this.__mmU))capture(JSON.parse(this.responseText));}catch(e){}});" +
+  "  return oSend.apply(this,arguments);" +
+  "};" +
+  "document.addEventListener('DOMContentLoaded',fromInitial);" +
+  "setTimeout(fromInitial,0);" +
+  "})();";
+
+const BROWSE_POLL =
+  "(function(){" +
+  "if(window.__mmComixBrowse) return window.__mmComixBrowse;" +
+  "try{" +
+  "  var el=document.querySelector('script#initial-data');" +
+  "  if(!el) return '';" +
+  "  var queries=JSON.parse(el.textContent).queries;" +
+  "  if(!queries) return '';" +
+  "  var vals=Object.keys(queries).map(function(k){return queries[k];});" +
+  "  for(var i=0;i<vals.length;i++){" +
+  "    var parsed=vals[i];" +
+  "    if(parsed&&Array.isArray(parsed.items)) parsed={result:parsed};" +
+  "    if(parsed&&parsed.result&&Array.isArray(parsed.result.items)&&parsed.result.items.length){" +
+  "      window.__mmComixBrowse=JSON.stringify(parsed);" +
+  "      return window.__mmComixBrowse;" +
+  "    }" +
+  "  }" +
+  "}catch(e){}" +
+  "return window.__mmComixBrowse||'';" +
+  "})()";
+
+const CHAPTERS_INJECT =
+  "(function(){" +
+  "if(window.__mmComixChHook)return;" +
+  "window.__mmComixChHook=1;" +
+  "window.__mmComixChapters='';" +
+  "function capture(parsed){" +
+  "  try{" +
+  "    var items=(parsed&&parsed.items)||(parsed&&parsed.result&&parsed.result.items)||null;" +
+  "    if(items&&items.length&&items[0]&&(items[0].id!=null||items[0].hid!=null||items[0].number!=null)){" +
+  "      window.__mmComixChapters=JSON.stringify(parsed.items?parsed:parsed.result||parsed);" +
+  "      return true;" +
+  "    }" +
+  "  }catch(e){}" +
+  "  return false;" +
+  "}" +
+  "function should(url){" +
+  "  try{" +
+  "    var u=new URL(url,location.origin);" +
+  "    return /\\/api\\/v1\\/manga\\/[^/]+\\/chapters\\/?$/.test(u.pathname);" +
+  "  }catch(e){return false;}" +
+  "}" +
+  "var ofetch=window.fetch;" +
+  "if(typeof ofetch==='function'){" +
+  "  window.fetch=function(){" +
+  "    return ofetch.apply(this,arguments).then(function(r){" +
+  "      try{if(should(r.url||'')) r.clone().text().then(function(t){try{capture(JSON.parse(t));}catch(e){}});}catch(e){}" +
+  "      return r;" +
+  "    });" +
+  "  };" +
+  "}" +
+  "})();";
+
+const CHAPTERS_POLL = "window.__mmComixChapters||''";
+
+const PAGES_INJECT =
+  "(function(){" +
+  "if(window.__mmComixPgHook)return;" +
+  "window.__mmComixPgHook=1;" +
+  "window.__mmComixPages='';" +
+  "function capture(parsed){" +
+  "  try{" +
+  "    var items=null, base='';" +
+  "    if(parsed&&Array.isArray(parsed.items)){items=parsed.items;base=parsed.baseUrl||parsed.base_url||'';}" +
+  "    else if(parsed&&parsed.data&&Array.isArray(parsed.data.items)){items=parsed.data.items;base=parsed.data.baseUrl||'';}" +
+  "    else if(parsed&&parsed.result&&Array.isArray(parsed.result.items)){items=parsed.result.items;base=parsed.result.baseUrl||'';}" +
+  "    else if(Array.isArray(parsed)){items=parsed;}" +
+  "    if(items&&items.length&&items[0]&&(typeof items[0]==='string'||items[0].url)){" +
+  "      window.__mmComixPages=JSON.stringify({baseUrl:base,items:items});" +
+  "      return true;" +
+  "    }" +
+  "  }catch(e){}" +
+  "  return false;" +
+  "}" +
+  "function should(url){" +
+  "  try{" +
+  "    var u=new URL(url,location.origin);" +
+  "    return /\\/api\\/v1\\/chapters\\/[^/]+\\/?$/.test(u.pathname);" +
+  "  }catch(e){return false;}" +
+  "}" +
+  "var ofetch=window.fetch;" +
+  "if(typeof ofetch==='function'){" +
+  "  window.fetch=function(){" +
+  "    return ofetch.apply(this,arguments).then(function(r){" +
+  "      try{if(should(r.url||'')) r.clone().text().then(function(t){try{capture(JSON.parse(t));}catch(e){}});}catch(e){}" +
+  "      return r;" +
+  "    });" +
+  "  };" +
+  "}" +
+  "})();";
+
+const PAGES_POLL = "window.__mmComixPages||''";
+
+const PAGE_IMG_FALLBACK =
+  "(function(){" +
+  "var out=[],seen={};" +
+  "function add(u){if(!u||seen[u])return;if(/^data:/i.test(u))return;seen[u]=1;out.push(u);}" +
+  "document.querySelectorAll('img').forEach(function(img){" +
+  "  var u=img.currentSrc||img.src||'';" +
+  "  if((img.naturalWidth||0)>=200||/\\/hi\\//i.test(u)||/wowpic/i.test(u)) add(u);" +
+  "});" +
+  "return out.length?JSON.stringify({baseUrl:'',items:out.map(function(u){return {url:u};})}):'';" +
+  "})()";
+
+function browseCapture(url, inject, poll, timeoutMs) {
+  // Clear previous payload so a stale listing cannot leak into the next call.
+  const clear =
+    inject.indexOf("__mmComixBrowse") !== -1
+      ? "window.__mmComixBrowse='';"
+      : inject.indexOf("__mmComixChapters") !== -1
+        ? "window.__mmComixChapters='';"
+        : "window.__mmComixPages='';";
+  return mm.http.browser(url, {
+    waitMs: 300,
+    inject: clear + inject,
+    script: poll,
+    pollMs: 450,
+    timeoutMs: timeoutMs || 22000,
+  });
 }
 
-function ensureHTML(body) {
+function ensureNotChallenge(body) {
   const text = body || "";
-  if (/just a moment|cf-browser-verification|challenge-platform|performing security verification/i.test(text)) {
-    mm.errors.fail("Cloudflare challenge. Complete the browser check, wait for the real page, then Continue.");
+  if (/<title>\s*just a moment/i.test(text) || /cdn-cgi\/challenge-platform/i.test(text)) {
+    mm.errors.fail("Cloudflare challenge. Complete the browser check, wait for the real site, then Continue.");
   }
   return text;
 }
 
-function initialData(html) {
-  const match = String(html || "").match(
-    /<script[^>]*id=["']initial-data["'][^>]*>([\s\S]*?)<\/script>/i
-  );
-  if (!match) return null;
+function parseJSONBody(res) {
+  const text = ensureNotChallenge(res.body);
   try {
-    return JSON.parse(match[1]);
+    return JSON.parse(text);
   } catch (e) {
-    return null;
+    mm.errors.fail(
+      "Comix did not return catalogue data. Complete Cloudflare, wait for the browse page to finish loading, then Continue."
+    );
   }
-}
-
-function queryEntries(data) {
-  const queries = (data && data.queries) || {};
-  const out = [];
-  const keys = Object.keys(queries);
-  for (let i = 0; i < keys.length; i++) {
-    let parsed = null;
-    try {
-      parsed = JSON.parse(keys[i]);
-    } catch (e) {
-      parsed = null;
-    }
-    out.push({ key: parsed, raw: keys[i], value: queries[keys[i]] });
-  }
-  return out;
 }
 
 function statusOf(text) {
   const t = String(text || "").toLowerCase();
-  if (t === "ongoing" || t === "publishing") return "ongoing";
-  if (t === "completed" || t === "complete" || t === "ended") return "completed";
-  if (t === "hiatus" || t === "on_hold" || t === "on hold") return "hiatus";
+  if (t === "ongoing" || t === "publishing" || t === "releasing") return "ongoing";
+  if (t === "completed" || t === "complete" || t === "ended" || t === "finished") return "completed";
+  if (t === "hiatus" || t === "on_hold" || t === "on hold" || t === "on_hiatus") return "hiatus";
   return "unknown";
 }
 
-function posterURL(poster, quality) {
+function posterURL(poster) {
   if (!poster) return undefined;
   if (typeof poster === "string") return poster;
-  const q = quality || mm.settings.get("poster") || "large";
+  const q = mm.settings.get("poster") || "large";
   if (q === "small") return poster.small || poster.medium || poster.large;
   if (q === "medium") return poster.medium || poster.large || poster.small;
   return poster.large || poster.medium || poster.small;
@@ -68,7 +221,10 @@ function slugFromItem(item) {
     .replace(/^https?:\/\/[^/]+/i, "")
     .replace(/^\/title\//, "")
     .replace(/^\/+/, "");
-  return path || item.hid;
+  if (path) return path;
+  const hid = item.hid || "";
+  const slug = item.slug;
+  return slug ? hid + "-" + slug : hid;
 }
 
 function mangaFromItem(item) {
@@ -95,122 +251,53 @@ function mangaFromItem(item) {
   };
 }
 
-function listItems(value) {
-  if (!value) return [];
-  if (value.items) return value.items;
-  if (value.result && value.result.items) return value.result.items;
-  return [];
+function listResult(data) {
+  const result = (data && data.result) || data || {};
+  const items = (result.items || [])
+    .map(mangaFromItem)
+    .filter(Boolean);
+  const hasNext =
+    result.hasNext === true ||
+    (result.meta && result.meta.hasNext === true) ||
+    (result.pagination && result.pagination.hasNext === true) ||
+    items.length >= 36;
+  return { items: items, hasNext: !!hasNext };
 }
 
-function homeBundle() {
-  const res = browse(BASE + "/home", 800);
-  const html = ensureHTML(res.body);
-  const data = initialData(html);
-  if (!data) mm.errors.fail("Comix home page had no catalogue data. Retry after Cloudflare.");
-  return queryEntries(data);
+function browseURL(orderKey, page, query, filters) {
+  const params = [
+    "order[" + orderKey + "]=desc",
+    "page=" + encodeURIComponent(String(page || 1)),
+  ];
+  if (query) params.push("keyword=" + encodeURIComponent(query));
+  const rating = (filters && filters.content_rating) || "";
+  if (rating) params.push("content_rating=" + encodeURIComponent(rating));
+  const type = filters && filters.type;
+  if (type) params.push("types[]=" + encodeURIComponent(type));
+  return BASE + "/browse?" + params.join("&");
 }
 
-function pickHomeList(mode) {
-  const entries = homeBundle();
-  let best = null;
-  for (let i = 0; i < entries.length; i++) {
-    const key = entries[i].key;
-    if (!Array.isArray(key) || key[0] !== "manga") continue;
-    const items = listItems(entries[i].value).filter(function (it) {
-      return it && it.hid && it.title;
-    });
-    if (!items.length) continue;
-    if (mode === "latest") {
-      if (key[1] === "list") {
-        const opts = key[2] || {};
-        if (opts.order && opts.order.chapter_updated_at === "desc") return items;
-        if (opts.scope === "hot" && !best) best = items;
-      }
-    } else {
-      if (key[1] === "top" && key[2] && key[2].type === "trending") return items;
-      if (key[1] === "top" && key[2] && key[2].type === "follows" && !best) best = items;
-      if (key[1] === "list" && key[2] && key[2].scope === "hot" && !best) best = items;
-    }
-  }
-  if (best) return best;
-  for (let i = 0; i < entries.length; i++) {
-    const items = listItems(entries[i].value).filter(function (it) {
-      return it && it.hid && it.title;
-    });
-    if (items.length) return items;
-  }
-  return [];
+function browseList(orderKey, page, query, filters) {
+  const url = browseURL(orderKey, page, query, filters);
+  const res = browseCapture(url, BROWSE_INJECT, BROWSE_POLL, 25000);
+  return listResult(parseJSONBody(res));
 }
 
-function detailFromData(data) {
-  const entries = queryEntries(data);
-  for (let i = 0; i < entries.length; i++) {
-    const key = entries[i].key;
-    if (!Array.isArray(key) || key[0] !== "manga" || key[1] !== "detail") continue;
-    const value = entries[i].value;
-    if (value && value.title) return value;
-    if (value && value.data && value.data.title) return value.data;
-  }
-  if (data && data.manga && data.manga.title) return data.manga;
-  return null;
+function hidOf(id) {
+  return String(id || "").split("-")[0];
 }
 
-function chaptersFromHTML(html, mangaId) {
-  const chapters = [];
-  const seen = {};
-  const hid = String(mangaId || "").split("-")[0];
-  const re = /\/title\/([a-z0-9-]+)\/(\d+)-chapter-([\w.-]+)/gi;
-  let match;
-  while ((match = re.exec(html))) {
-    const slug = match[1];
-    if (hid && slug.indexOf(hid) !== 0 && slug !== mangaId) continue;
-    const numericId = match[2];
-    const chapterSlug = match[3];
-    if (seen[numericId]) continue;
-    seen[numericId] = true;
-    const number = Number(String(chapterSlug).replace(/_/g, "."));
-    chapters.push({
-      id: numericId + "-chapter-" + chapterSlug,
-      title: "Chapter " + chapterSlug.replace(/_/g, "."),
-      chapter: isNaN(number) ? undefined : number,
-      language: "en",
-    });
-  }
-  chapters.sort(function (a, b) {
-    const an = a.chapter == null ? -1 : a.chapter;
-    const bn = b.chapter == null ? -1 : b.chapter;
-    return bn - an;
-  });
-  const deduped = [];
-  const seenNum = {};
-  for (let i = 0; i < chapters.length; i++) {
-    const key = chapters[i].chapter == null ? chapters[i].id : String(chapters[i].chapter);
-    if (seenNum[key]) continue;
-    seenNum[key] = true;
-    deduped.push(chapters[i]);
-  }
-  return deduped;
+function chapterIdOf(chapterId) {
+  const s = String(chapterId || "");
+  if (s.indexOf("-chapter-") !== -1) return s.split("-")[0];
+  return s;
 }
-
-const PAGE_SCRIPT =
-  "(function(){" +
-  "var out=[],seen={};" +
-  "function add(u){if(!u||seen[u])return;if(/^data:/i.test(u))return;seen[u]=1;out.push(u);}" +
-  "document.querySelectorAll('img').forEach(function(img){" +
-  "  var u=img.currentSrc||img.src||'';" +
-  "  if((img.naturalWidth||0)>=200||/\\/hi\\//i.test(u)||/wowpic/i.test(u)) add(u);" +
-  "});" +
-  "performance.getEntriesByType('resource').forEach(function(e){" +
-  "  if(/\\.(webp|jpg|jpeg|png)(\\?|$)/i.test(e.name)||/\\/hi\\//i.test(e.name)) add(e.name);" +
-  "});" +
-  "return JSON.stringify(out);" +
-  "})()";
 
 globalThis.source = {
   manifest: {
     id: "en.comix",
     name: "Comix",
-    version: 5,
+    version: 6,
     language: "en",
     nsfw: true,
     baseURL: BASE,
@@ -248,81 +335,144 @@ globalThis.source = {
   },
 
   getListing(listingId, page) {
-    if (page > 1) return { items: [], hasNext: false };
-    const items = pickHomeList(listingId === "latest" ? "latest" : "popular")
-      .map(mangaFromItem)
-      .filter(Boolean);
-    return { items: items, hasNext: false };
+    const order = listingId === "latest" ? "chapter_updated_at" : "score";
+    return browseList(order, page, "", {});
   },
 
   search(query, page, filters) {
-    if (page > 1) return { items: [], hasNext: false };
-    const needle = String(query || "")
-      .toLowerCase()
-      .trim();
-    const pool = pickHomeList("popular").concat(pickHomeList("latest"));
-    const seen = {};
-    const items = [];
-    for (let i = 0; i < pool.length; i++) {
-      const manga = mangaFromItem(pool[i]);
-      if (!manga || seen[manga.id]) continue;
-      seen[manga.id] = true;
-      if (!needle || manga.title.toLowerCase().indexOf(needle) !== -1) items.push(manga);
-    }
-    return { items: items, hasNext: false };
+    return browseList("score", page, query, filters || {});
   },
 
   getFilters() {
-    return [];
+    return [
+      {
+        id: "content_rating",
+        name: "Content rating",
+        kind: "select",
+        defaultValue: "",
+        options: ["", "safe", "suggestive", "erotica", "pornographic"],
+      },
+      {
+        id: "type",
+        name: "Type",
+        kind: "select",
+        defaultValue: "",
+        options: ["", "manga", "manhwa", "manhua", "oel"],
+      },
+    ];
   },
 
   getManga(id) {
-    const res = browse(BASE + "/title/" + id, 600);
-    const html = ensureHTML(res.body);
-    const data = initialData(html);
-    const detail = detailFromData(data);
-    if (detail) {
+    const DETAIL_POLL =
+      "(function(){" +
+      "try{" +
+      "  var el=document.querySelector('script#initial-data');" +
+      "  if(!el)return '';" +
+      "  var queries=JSON.parse(el.textContent).queries||{};" +
+      "  var keys=Object.keys(queries);" +
+      "  for(var i=0;i<keys.length;i++){" +
+      "    var key; try{key=JSON.parse(keys[i]);}catch(e){continue;}" +
+      "    if(!Array.isArray(key)||key[0]!=='manga'||key[1]!=='detail')continue;" +
+      "    var v=queries[keys[i]];" +
+      "    if(v&&v.title) return JSON.stringify(v);" +
+      "    if(v&&v.data&&v.data.title) return JSON.stringify(v.data);" +
+      "  }" +
+      "}catch(e){}" +
+      "return '';" +
+      "})()";
+    const res = mm.http.browser(BASE + "/title/" + id, {
+      waitMs: 400,
+      script: DETAIL_POLL,
+      pollMs: 450,
+      timeoutMs: 20000,
+    });
+    let detail;
+    try {
+      detail = JSON.parse(res.body);
+    } catch (e) {
+      detail = null;
+    }
+    if (detail && detail.title) {
       const manga = mangaFromItem(detail);
       if (manga) {
         manga.id = id;
         return manga;
       }
     }
+    const html = ensureNotChallenge(res.body);
+    const titleMatch = html.match(/<h1[^>]*>([^<]+)<\/h1>/i);
+    if (titleMatch) return { id: id, title: titleMatch[1].trim() };
     mm.errors.fail("Manga not found.");
   },
 
   getChapters(mangaId) {
-    // Wait for the client chapter list to hydrate after Cloudflare.
-    const res = browse(BASE + "/title/" + mangaId, 3500);
-    const html = ensureHTML(res.body);
-    const chapters = chaptersFromHTML(html, mangaId);
-    if (!chapters.length) {
-      mm.errors.fail(
-        "No chapters found. Complete the Cloudflare check for Comix, wait for the title page to finish loading, then try again."
-      );
+    const res = browseCapture(BASE + "/title/" + mangaId, CHAPTERS_INJECT, CHAPTERS_POLL, 30000);
+    const data = parseJSONBody(res);
+    const items = data.items || data.chapters || [];
+    if (!items.length) mm.errors.fail("No chapters found. Wait for the title page to finish loading, then retry.");
+    const chapters = [];
+    for (let i = 0; i < items.length; i++) {
+      const ch = items[i];
+      const number = ch.number;
+      const cid = String(ch.id);
+      const slug = String(number).replace(/\./g, "_");
+      const name = ch.name
+        ? "Chapter " + String(number).replace(/\.0$/, "") + ": " + ch.name
+        : "Chapter " + String(number).replace(/\.0$/, "");
+      chapters.push({
+        id: cid + "-chapter-" + slug,
+        title: name,
+        chapter: number,
+        scanlator: ch.type || (ch.group && ch.group.title) || undefined,
+        language: "en",
+      });
     }
+    chapters.sort(function (a, b) {
+      const an = a.chapter == null ? -1 : a.chapter;
+      const bn = b.chapter == null ? -1 : b.chapter;
+      return bn - an;
+    });
     return chapters;
   },
 
   getPages(mangaId, chapterId) {
+    const numeric = chapterIdOf(chapterId);
     const path =
       String(chapterId).indexOf("-chapter-") !== -1
         ? "/title/" + mangaId + "/" + chapterId
         : "/title/" + mangaId + "/" + chapterId;
-    const res = mm.http.browser(BASE + path, { waitMs: 4500, script: PAGE_SCRIPT });
-    ensureHTML(res.body);
-    let urls = [];
+    let res = browseCapture(BASE + path, PAGES_INJECT, PAGES_POLL, 30000);
+    let payload;
     try {
-      urls = JSON.parse(res.body);
+      payload = JSON.parse(res.body);
     } catch (e) {
-      urls = [];
+      payload = null;
     }
-    if (!Array.isArray(urls) || !urls.length) {
-      mm.errors.fail(
-        "No page images yet. Open the chapter once in the browser check if needed, wait for pages to appear, then retry."
-      );
+    if (!payload || !payload.items || !payload.items.length) {
+      res = mm.http.browser(BASE + path, {
+        waitMs: 4000,
+        script: PAGE_IMG_FALLBACK,
+        pollMs: 500,
+        timeoutMs: 12000,
+      });
+      try {
+        payload = JSON.parse(res.body);
+      } catch (e2) {
+        payload = null;
+      }
     }
-    return urls.map(function (url) {
+    if (!payload || !payload.items || !payload.items.length) {
+      mm.errors.fail("No page images yet. Open the chapter once after Cloudflare, wait for pages, then retry.");
+    }
+    const base = String(payload.baseUrl || "").replace(/\/+$/, "");
+    return payload.items.map(function (item) {
+      const pathOrUrl = typeof item === "string" ? item : item.url;
+      let url = /^https?:\/\//i.test(pathOrUrl)
+        ? pathOrUrl
+        : base + "/" + String(pathOrUrl).replace(/^\/+/, "");
+      if ((item && item.s === 1) || /[?&]v3(=|&|$)/.test(url)) {
+        if (url.indexOf("v3") === -1) url += (url.indexOf("?") === -1 ? "?" : "&") + "v3";
+      }
       return { url: url, headers: { Referer: "", Origin: "" } };
     });
   },
