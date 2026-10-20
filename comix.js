@@ -1,35 +1,18 @@
 // Comix — https://comix.to
-// Catalogue/details come from SSR #initial-data after Cloudflare cookies.
-// Chapter/page APIs are signed by an obfuscated in-page VM that rotates; those
-// calls cannot be forged from a static script, so chapters/pages scrape what
-// the title HTML exposes and otherwise fail clearly.
+// Catalogue, details, and chapter lists are loaded through mm.http.browser so
+// Cloudflare clearance stays in the same WKWebView cookie store as the
+// challenge sheet. Signed /api/v1 calls cannot be forged after Comix moved the
+// signer into a rotating VM.
 const BASE = "https://comix.to";
 
-function headers(extra) {
-  const out = {
-    Accept: "text/html,application/xhtml+xml,application/json",
-    Referer: BASE + "/",
-    Origin: BASE,
-  };
-  if (extra) {
-    for (const key in extra) out[key] = extra[key];
-  }
-  return out;
-}
-
-function get(url, extra) {
-  return mm.http.get(url, headers(extra));
+function browse(url, waitMs) {
+  return mm.http.browser(url, { waitMs: waitMs || 0 });
 }
 
 function ensureHTML(body) {
   const text = body || "";
-  if (/just a moment|cf-browser-verification|challenge-platform/i.test(text)) {
-    mm.errors.fail("Cloudflare challenge. Open Comix once from the challenge sheet, then retry.");
-  }
-  if (/missing_token|Missing token/i.test(text)) {
-    mm.errors.fail(
-      "Comix rejected a signed API call. Update this source — browse uses the HTML catalogue now."
-    );
+  if (/just a moment|cf-browser-verification|challenge-platform|performing security verification/i.test(text)) {
+    mm.errors.fail("Cloudflare challenge. Complete the browser check, wait for the real page, then Continue.");
   }
   return text;
 }
@@ -120,7 +103,7 @@ function listItems(value) {
 }
 
 function homeBundle() {
-  const res = get(BASE + "/home");
+  const res = browse(BASE + "/home", 800);
   const html = ensureHTML(res.body);
   const data = initialData(html);
   if (!data) mm.errors.fail("Comix home page had no catalogue data. Retry after Cloudflare.");
@@ -140,20 +123,16 @@ function pickHomeList(mode) {
     if (mode === "latest") {
       if (key[1] === "list") {
         const opts = key[2] || {};
-        if (opts.order && opts.order.chapter_updated_at === "desc") {
-          return items;
-        }
+        if (opts.order && opts.order.chapter_updated_at === "desc") return items;
         if (opts.scope === "hot" && !best) best = items;
       }
     } else {
-      // popular: prefer trending top, then follows, then hot list
       if (key[1] === "top" && key[2] && key[2].type === "trending") return items;
       if (key[1] === "top" && key[2] && key[2].type === "follows" && !best) best = items;
       if (key[1] === "list" && key[2] && key[2].scope === "hot" && !best) best = items;
     }
   }
   if (best) return best;
-  // Any manga list on the page
   for (let i = 0; i < entries.length; i++) {
     const items = listItems(entries[i].value).filter(function (it) {
       return it && it.hid && it.title;
@@ -179,14 +158,12 @@ function detailFromData(data) {
 function chaptersFromHTML(html, mangaId) {
   const chapters = [];
   const seen = {};
+  const hid = String(mangaId || "").split("-")[0];
   const re = /\/title\/([a-z0-9-]+)\/(\d+)-chapter-([\w.-]+)/gi;
   let match;
   while ((match = re.exec(html))) {
     const slug = match[1];
-    if (mangaId && slug.indexOf(String(mangaId).split("-")[0]) !== 0 && slug !== mangaId) {
-      // keep chapters that belong to this title slug when possible
-      if (slug !== mangaId) continue;
-    }
+    if (hid && slug.indexOf(hid) !== 0 && slug !== mangaId) continue;
     const numericId = match[2];
     const chapterSlug = match[3];
     if (seen[numericId]) continue;
@@ -204,7 +181,6 @@ function chaptersFromHTML(html, mangaId) {
     const bn = b.chapter == null ? -1 : b.chapter;
     return bn - an;
   });
-  // Prefer one row per chapter number (official / highest id wins by sort order).
   const deduped = [];
   const seenNum = {};
   for (let i = 0; i < chapters.length; i++) {
@@ -216,11 +192,25 @@ function chaptersFromHTML(html, mangaId) {
   return deduped;
 }
 
+const PAGE_SCRIPT =
+  "(function(){" +
+  "var out=[],seen={};" +
+  "function add(u){if(!u||seen[u])return;if(/^data:/i.test(u))return;seen[u]=1;out.push(u);}" +
+  "document.querySelectorAll('img').forEach(function(img){" +
+  "  var u=img.currentSrc||img.src||'';" +
+  "  if((img.naturalWidth||0)>=200||/\\/hi\\//i.test(u)||/wowpic/i.test(u)) add(u);" +
+  "});" +
+  "performance.getEntriesByType('resource').forEach(function(e){" +
+  "  if(/\\.(webp|jpg|jpeg|png)(\\?|$)/i.test(e.name)||/\\/hi\\//i.test(e.name)) add(e.name);" +
+  "});" +
+  "return JSON.stringify(out);" +
+  "})()";
+
 globalThis.source = {
   manifest: {
     id: "en.comix",
     name: "Comix",
-    version: 4,
+    version: 5,
     language: "en",
     nsfw: true,
     baseURL: BASE,
@@ -238,7 +228,7 @@ globalThis.source = {
       "wowpic8.store",
       "wowpic9.store",
     ],
-    rateLimitPerSecond: 2,
+    rateLimitPerSecond: 1,
     imageHeaders: {},
     listings: [
       { id: "popular", name: "Popular" },
@@ -258,10 +248,7 @@ globalThis.source = {
   },
 
   getListing(listingId, page) {
-    if (page > 1) {
-      // Home SSR only embeds page 1. Avoid the signed API that returns missing_token.
-      return { items: [], hasNext: false };
-    }
+    if (page > 1) return { items: [], hasNext: false };
     const items = pickHomeList(listingId === "latest" ? "latest" : "popular")
       .map(mangaFromItem)
       .filter(Boolean);
@@ -290,7 +277,7 @@ globalThis.source = {
   },
 
   getManga(id) {
-    const res = get(BASE + "/title/" + id);
+    const res = browse(BASE + "/title/" + id, 600);
     const html = ensureHTML(res.body);
     const data = initialData(html);
     const detail = detailFromData(data);
@@ -305,25 +292,38 @@ globalThis.source = {
   },
 
   getChapters(mangaId) {
-    const res = get(BASE + "/title/" + mangaId);
+    // Wait for the client chapter list to hydrate after Cloudflare.
+    const res = browse(BASE + "/title/" + mangaId, 3500);
     const html = ensureHTML(res.body);
     const chapters = chaptersFromHTML(html, mangaId);
-    if (chapters.length < 2) {
+    if (!chapters.length) {
       mm.errors.fail(
-        "Comix only embeds a couple of chapters in the page HTML. Full chapter lists need their live signed API, which MangaMan cannot forge after Comix rotated the signer."
+        "No chapters found. Complete the Cloudflare check for Comix, wait for the title page to finish loading, then try again."
       );
     }
     return chapters;
   },
 
   getPages(mangaId, chapterId) {
-    const path = String(chapterId).indexOf("-chapter-") !== -1
-      ? "/title/" + mangaId + "/" + chapterId
-      : "/title/" + mangaId + "/" + chapterId;
-    const res = get(BASE + path);
+    const path =
+      String(chapterId).indexOf("-chapter-") !== -1
+        ? "/title/" + mangaId + "/" + chapterId
+        : "/title/" + mangaId + "/" + chapterId;
+    const res = mm.http.browser(BASE + path, { waitMs: 4500, script: PAGE_SCRIPT });
     ensureHTML(res.body);
-    mm.errors.fail(
-      "Comix page images come from a signed, encrypted API that rotates its signer. Browse and details work after Cloudflare; reading chapters needs a WebView-backed update."
-    );
+    let urls = [];
+    try {
+      urls = JSON.parse(res.body);
+    } catch (e) {
+      urls = [];
+    }
+    if (!Array.isArray(urls) || !urls.length) {
+      mm.errors.fail(
+        "No page images yet. Open the chapter once in the browser check if needed, wait for pages to appear, then retry."
+      );
+    }
+    return urls.map(function (url) {
+      return { url: url, headers: { Referer: "", Origin: "" } };
+    });
   },
 };

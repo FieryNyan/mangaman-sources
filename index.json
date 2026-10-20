@@ -62,11 +62,11 @@
     {
       "id": "en.comix",
       "name": "Comix",
-      "version": 4,
+      "version": 5,
       "language": "en",
       "nsfw": true,
       "file": "comix.js",
-      "sha256": "7cef379974fad1c6cbdfafa5064e34cec2e4cde246669cb351f6e23d9356381e",
+      "sha256": "693fa2aab02fc41bd08aa4245b5063c685af7ce2cc47b99c74256b703fc890f4",
       "domains": [
         "comix.to",
         "comix.ws",
