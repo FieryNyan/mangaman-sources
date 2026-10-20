@@ -51,11 +51,11 @@
     {
       "id": "en.mangahub",
       "name": "MangaHub",
-      "version": 2,
+      "version": 3,
       "language": "en",
       "nsfw": false,
       "file": "mangahub.js",
-      "sha256": "ac4beaecfd23716c18e423be268f196701dc682dba34d5ac6626e92e236c7606",
+      "sha256": "78aa608c4df50321c1e534f2c1f57adfaccc8ed9a246cd958c1400e56e314980",
       "domains": [
         "mangahub.io",
         "mghcdn.com"

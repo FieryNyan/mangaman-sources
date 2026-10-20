@@ -1,4 +1,4 @@
-// MangaHub — https://mangahub.io (GraphQL API)
+// MangaHub — https://mangahub.io (GraphQL API + enc:v1 page lists)
 const BASE = "https://mangahub.io";
 const API = "https://api.mghcdn.com/graphql";
 const CDN = "https://imgx.mghcdn.com";
@@ -62,19 +62,57 @@ function graphql(query, refreshPath) {
 
 function refreshKey(refreshPath) {
   const path = refreshPath || "/chapter/martial-peak/chapter-" + (1000 + Math.floor(Math.random() * 2000));
-  const url = BASE + path + (path.indexOf("?") === -1 ? "?reloadKey=1" : "&reloadKey=1");
-  try {
-    const res = mm.http.get(url, { Referer: BASE + "/" });
-    const setCookie = res.headers["Set-Cookie"] || res.headers["set-cookie"] || "";
-    const match = String(setCookie).match(/mhub_access=([^;]+)/);
-    if (match) {
-      saveKey(match[1]);
-      return;
+  const attempts = [
+    BASE + path + (path.indexOf("?") === -1 ? "?reloadKey=1" : "&reloadKey=1"),
+    BASE + path,
+  ];
+  const old = apiKey();
+  for (let i = 0; i < attempts.length; i++) {
+    try {
+      const res = mm.http.get(attempts[i], {
+        Accept: "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+        Referer: BASE + "/",
+      });
+      const setCookie = res.headers["Set-Cookie"] || res.headers["set-cookie"] || "";
+      const match = String(setCookie).match(/mhub_access=([^;]+)/);
+      if (match && match[1] && match[1] !== old) {
+        saveKey(match[1]);
+        return;
+      }
+    } catch (e) {
+      // Challenge bubbles to the app sheet when CF blocks the chapter page.
     }
-  } catch (e) {
-    // Challenge or block — store a fresh random key and retry.
   }
   saveKey(randomKey());
+}
+
+function decryptPages(enc) {
+  const parts = String(enc || "").split(":");
+  // enc:v1:keyId:iv:authTag:ciphertext
+  if (parts.length < 6 || parts[0] !== "enc" || parts[1] !== "v1") {
+    mm.errors.fail("Unsupported MangaHub page encryption.");
+  }
+  const keyId = parts[2];
+  const iv = parts[3];
+  const tag = parts[4];
+  const ciphertext = parts[5];
+  const cryptoRes = mm.http.get(BASE + "/api/chapter-crypto", {
+    Accept: "application/json",
+    Referer: BASE + "/",
+    Origin: BASE,
+    "x-mhub-access": apiKey(),
+  });
+  let crypto;
+  try {
+    crypto = JSON.parse(cryptoRes.body);
+  } catch (e) {
+    mm.errors.fail("Could not load MangaHub chapter keys.");
+  }
+  let keyData = null;
+  if (crypto.keys && crypto.keys[keyId]) keyData = crypto.keys[keyId];
+  else if (crypto.key && (!crypto.keyId || crypto.keyId === keyId)) keyData = crypto.key;
+  if (!keyData) mm.errors.fail("MangaHub decrypt key not found.");
+  return mm.crypto.aesGcmDecrypt(keyData, iv, tag, ciphertext);
 }
 
 function escapeQuery(value) {
@@ -126,11 +164,33 @@ function mangaSummary(row) {
   };
 }
 
+function parsePageList(pagesString) {
+  let parsed = pagesString;
+  if (typeof pagesString === "string") {
+    try {
+      parsed = JSON.parse(pagesString);
+    } catch (e) {
+      mm.errors.fail("Could not parse page list.");
+    }
+  }
+  let paths = [];
+  if (parsed && typeof parsed === "object" && !Array.isArray(parsed) && parsed.i) {
+    const prefix = parsed.p || "";
+    paths = parsed.i.map(function (name) { return prefix + name; });
+  } else if (Array.isArray(parsed)) {
+    paths = parsed;
+  } else if (parsed && typeof parsed === "object") {
+    const keys = Object.keys(parsed);
+    paths = keys.map(function (k) { return parsed[k]; });
+  }
+  return paths;
+}
+
 globalThis.source = {
   manifest: {
     id: "en.mangahub",
     name: "MangaHub",
-    version: 2,
+    version: 3,
     language: "en",
     nsfw: false,
     baseURL: BASE,
@@ -223,30 +283,14 @@ globalThis.source = {
   getPages(mangaId, chapterId) {
     const number = Number(chapterId);
     if (!isFinite(number)) mm.errors.fail("Bad chapter id.");
-    const data = graphql(pagesQuery(mangaId, number), "/chapter/" + mangaId + "/chapter-" + number);
+    const refreshPath = "/chapter/" + mangaId + "/chapter-" + number;
+    const data = graphql(pagesQuery(mangaId, number), refreshPath);
     if (!data.chapter || data.chapter.pages == null) mm.errors.fail("No pages found.");
     let pagesString = data.chapter.pages;
     if (typeof pagesString === "string" && pagesString.indexOf("enc:v1") === 0) {
-      mm.errors.fail("This chapter's pages are encrypted. Open MangaHub in the challenge sheet, then try again later.");
+      pagesString = decryptPages(pagesString);
     }
-    let parsed = pagesString;
-    if (typeof pagesString === "string") {
-      try {
-        parsed = JSON.parse(pagesString);
-      } catch (e) {
-        mm.errors.fail("Could not parse page list.");
-      }
-    }
-    let paths = [];
-    if (parsed && typeof parsed === "object" && !Array.isArray(parsed) && parsed.i) {
-      const prefix = parsed.p || "";
-      paths = parsed.i.map(function (name) { return prefix + name; });
-    } else if (Array.isArray(parsed)) {
-      paths = parsed;
-    } else if (parsed && typeof parsed === "object") {
-      const keys = Object.keys(parsed);
-      paths = keys.map(function (k) { return parsed[k]; });
-    }
+    const paths = parsePageList(pagesString);
     if (!paths.length) mm.errors.fail("No pages found.");
     return paths.map(function (path) {
       const url = /^https?:\/\//i.test(path) ? path : CDN + "/" + String(path).replace(/^\//, "");
